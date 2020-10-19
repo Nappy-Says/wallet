@@ -186,20 +186,35 @@ func TestService_Import_success_user(t *testing.T) {
 }
 
 func TestService_Export_success(t *testing.T) {
-	svc := Service{}
+  svc := Service{}
 
-	svc.RegisterAccount("+992000000001")
-	svc.RegisterAccount("+992000000002")
-	svc.RegisterAccount("+992000000003")
-	svc.RegisterAccount("+992000000004")
+  account, err := svc.RegisterAccount("+992000000001")
+  if err != nil {
+    t.Errorf("method RegisterAccount returned not nil error, account => %v", account)
+  }
 
-	err := svc.Export("../../data")
-	if err != nil {
-		t.Errorf("method ExportToFile returned not nil error, err => %v", err)
-	}
+  err = svc.Deposit(account.ID, 100_00)
+  if err != nil {
+    t.Errorf("method Deposit returned not nil error, error => %v", err)
+  }
 
-	err = svc.Import("data")
-	if err != nil {
-		t.Errorf("method ExportToFile returned not nil error, err => %v", err)
-	}
+  payment, err := svc.Pay(account.ID, 10_00, "auto")
+  if err != nil {
+    t.Errorf("Pay() Error() can't pay for an account(%v): %v", account, err)
+  }
+
+  favorite, err := svc.FavoritePayment(payment.ID, "megafon")
+  if err != nil {
+    t.Errorf("FavoritePayment() Error() can't for an favorite(%v): %v", favorite, err)
+  }
+
+  err = svc.Export("../../data")
+  if err != nil {
+    t.Errorf("method ExportToFile returned not nil error, err => %v", err)
+  }
+
+  err = svc.Import("../../data")
+  if err != nil {
+    t.Errorf("method ExportToFile returned not nil error, err => %v", err)
+  }
 }

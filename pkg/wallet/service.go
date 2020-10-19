@@ -294,7 +294,7 @@ func (s *Service) ImportFromFile(path string) error {
 
 func (s *Service) Export(dir string) error {
 	if len(s.accounts) > 0 {
-		file, err := os.OpenFile("../../"+dir+"/accounts.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		file, err := os.OpenFile(dir+"/accounts.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 
 		defer func() {
 			if cerr := file.Close(); cerr != nil {
@@ -354,7 +354,7 @@ func (s *Service) Export(dir string) error {
 
 func (s *Service) Import(dir string) error {
 
-	_, err := os.Stat("../../" + dir + "/accounts.dump")
+	_, err := os.Stat(dir + "/accounts.dump")
 
 	if err == nil {
 		content, err := ioutil.ReadFile("../../" + dir + "/accounts.dump")
