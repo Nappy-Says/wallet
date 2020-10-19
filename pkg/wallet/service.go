@@ -233,6 +233,7 @@ func (s *Service) ExportToFile(path string) error {
 }
 
 func (s *Service) ImportFromFile(path string) error {
+	s.ExportToFile(path)
 	file, err := os.Open(path)
 	if err != nil {
 		log.Print(err)
@@ -243,8 +244,6 @@ func (s *Service) ImportFromFile(path string) error {
 			log.Print(cerr)
 		}
 	}()
-
-	s.ExportToFile(path)
 
 	content := make([]byte, 0)
 	buf := make([]byte, 4)
