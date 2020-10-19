@@ -312,7 +312,7 @@ func (s *Service) Export(dir string) error {
 		file.WriteString(str)
 	}
 	if len(s.payments) > 0 {
-		file, _ := os.OpenFile("../../"+dir+"/payments.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		file, _ := os.OpenFile(dir+"/payments.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 
 		defer func() {
 			if cerr := file.Close(); cerr != nil {
@@ -331,7 +331,7 @@ func (s *Service) Export(dir string) error {
 	}
 
 	if len(s.favorites) > 0 {
-		file, _ := os.OpenFile("../../"+dir+"/favorites.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
+		file, _ := os.OpenFile(dir+"/favorites.dump", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 
 		defer func() {
 			if cerr := file.Close(); cerr != nil {
@@ -357,7 +357,7 @@ func (s *Service) Import(dir string) error {
 	_, err := os.Stat(dir + "/accounts.dump")
 
 	if err == nil {
-		content, err := ioutil.ReadFile("../../" + dir + "/accounts.dump")
+		content, err := ioutil.ReadFile(dir + "/accounts.dump")
 		if err != nil {
 			return err
 		}
@@ -397,10 +397,10 @@ func (s *Service) Import(dir string) error {
 		}
 	}
 
-	_, err1 := os.Stat("../../" + dir + "/payments.dump")
+	_, err1 := os.Stat(dir + "/payments.dump")
 
 	if err1 == nil {
-		content, err := ioutil.ReadFile("../../" + dir + "/payments.dump")
+		content, err := ioutil.ReadFile(dir + "/payments.dump")
 		if err != nil {
 			return err
 		}
@@ -448,10 +448,10 @@ func (s *Service) Import(dir string) error {
 		}
 	}
 
-	_, err2 := os.Stat("../../" + dir + "/favorites.dump")
+	_, err2 := os.Stat(dir + "/favorites.dump")
 
 	if err2 == nil {
-		content, err := ioutil.ReadFile("../../" + dir + "/favorites.dump")
+		content, err := ioutil.ReadFile(dir + "/favorites.dump")
 		if err != nil {
 			return err
 		}
