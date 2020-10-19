@@ -193,7 +193,7 @@ func TestService_Export_success(t *testing.T) {
 	svc.RegisterAccount("+992000000003")
 	svc.RegisterAccount("+992000000004")
 
-	err := svc.Export("data")
+	err := svc.Export("../../data")
 	if err != nil {
 		t.Errorf("method ExportToFile returned not nil error, err => %v", err)
 	}
