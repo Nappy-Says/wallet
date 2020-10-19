@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/Firdavs2002/wallet/pkg/wallet"
+	"github.com/Nappy-Says/wallet/pkg/wallet"
 )
 
 func main() {
@@ -10,4 +10,5 @@ func main() {
 	svc.RegisterAccount("+992000000002")
 	svc.RegisterAccount("+992000000003")
 	svc.ExportToFile("data/export.txt")
+	svc.ImportFromFile("data/import.txt")
 }
