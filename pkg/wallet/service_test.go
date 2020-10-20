@@ -1,727 +1,388 @@
 package wallet
 
 import (
-	"errors"
-	"github.com/Nappy-Says/wallet/pkg/types"
 	"github.com/google/uuid"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
+	"fmt"
+	"github.com/Nappy-Says/wallet/pkg/types"
 )
 
-var defaultFavorite = types.Favorite{
-	ID:        uuid.New().String(),
-	AccountID: 1,
-	Name:      types.CategoryIt,
-	Amount:    10,
-	Category:  types.CategoryIt,
-}
-
-type testService struct {
+type testService struct{
 	*Service
 }
-
 func newTestService() *testService {
-	return &testService{
-		Service: &Service{},
+	return &testService{Service: &Service{}}
+}
+
+type testAccount struct {
+	phone    types.Phone
+	balance  types.Money
+	payments []struct {
+		amount   types.Money
+		category types.PaymentCategory
 	}
+}
+
+func (s *testService) addAccount(data testAccount) (*types.Account, []*types.Payment, error) {
+	account, err := s.RegisterAccount(data.phone)
+	if err != nil {
+		return nil, nil, fmt.Errorf("can't register account, error = %v", err)
+	}
+
+	err = s.Deposit(account.ID, data.balance)
+	if err != nil {
+		return nil, nil, fmt.Errorf("can't deposit into account, error = %v", err)
+	}
+	payments := make([]*types.Payment, len(data.payments))
+	for i, payment := range data.payments {
+		payments[i], err = s.Pay(account.ID, payment.amount, payment.category)
+		if err != nil {
+			return nil, nil, fmt.Errorf("can't make payment, erropr = %v", err)
+		}
+	}
+	return account, payments, nil
+}
+
+func (s *testService) addAccountWithBalance(phone types.Phone, balance types.Money) (*types.Account, error) {
+	account, err := s.RegisterAccount(phone)
+	if err != nil {
+		return nil, fmt.Errorf("can't register account, error = %v", err)
+	}
+
+	err = s.Deposit(account.ID, balance)
+	if err != nil {
+		return nil, fmt.Errorf("can't deposit account, error = %v", err)
+	}
+
+	return account, nil
+}
+
+var defaultTestAccount = testAccount{
+	phone:   "+992000000001",
+	balance: 10_000_00,
+	payments: []struct {
+		amount   types.Money
+		category types.PaymentCategory
+	}{
+		{amount: 1_000_00, category: "auto"},
+	},
 }
 
 func TestService_FindAccountByID_success(t *testing.T) {
-	var service Service
-	service.RegisterAccount("9127660305")
-
-	account, err := service.FindAccountByID(1)
-
+	svc := &Service{}
+	account, err := svc.RegisterAccount("+992000000001")
 	if err != nil {
-		t.Errorf("account => %v", account)
+		fmt.Println(err)
+		return
 	}
 
+	account, err = svc.RegisterAccount("+992000000002")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	account, err = svc.RegisterAccount("+992000000003")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	account, err = svc.FindAccountByID(2)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	var expected = types.Phone("+992000000002")
+
+	if account.Phone != expected {
+		t.Errorf("invalid result, expected: %v, got: %v", expected, account.Phone)
+	}
 }
 
 func TestService_FindAccountByID_notFound(t *testing.T) {
-	var service Service
-	service.RegisterAccount("9127660305")
+	svc := &Service{}
+	account, err := svc.RegisterAccount("+992000000001")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-	account, err := service.FindAccountByID(2)
+	account, err = svc.RegisterAccount("+992000000002")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	account, err = svc.RegisterAccount("+992000000003")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
+	account, err = svc.FindAccountByID(4)
+
+	var expected = ErrAccountNotFound
+
+	if err != expected {
+		t.Errorf("invalid result, expected: %v, got: %v", expected, account.Phone)
+	}
+}
+
+func TestService_FindPaymentByID_success(t *testing.T) {
+	s := newTestService()
+
+	_, payments, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	payment := payments[0]
+	got, err := s.FindPaymentByID(payment.ID)
+	if err != nil {
+		t.Errorf("FindPaymentByID(): error = %v", err)
+		return
+	}
+
+	if !reflect.DeepEqual(payment, got) {
+		t.Errorf("FindPaymentByID(): wrong payment returned = %v", err)
+		return
+	}
+}
+
+func TestService_FindPaymentByID_fail(t *testing.T) {
+	s := newTestService()
+	_, _, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = s.FindPaymentByID(uuid.New().String())
 	if err == nil {
-		t.Errorf("method returned nil error, account => %v", account)
+		t.Error("FindPaymentByID(): must return error, returned nil")
 	}
 
+	if err != ErrPaymentNotFound {
+		t.Errorf("FindPaymentByID(): must return ErrPaymentNotFound, returned = %v", err)
+		return
+	}
 }
 
-func TestService_Reject_success_user(t *testing.T) {
-	var service Service
-	service.RegisterAccount("9127660305")
-	account, err := service.FindAccountByID(1)
-
+func TestService_Reject_success(t *testing.T) {
+	s := newTestService()
+	_, payments, err := s.addAccount(defaultTestAccount)
 	if err != nil {
-		t.Errorf("error => %v", err)
+		t.Error(err)
+		return
 	}
 
-	err = service.Deposit(account.ID, 100_00)
+	payment := payments[0]
+	err = s.Reject(payment.ID)
 	if err != nil {
-		t.Errorf("error => %v", err)
+		t.Errorf("Reject(): error = %v", err)
+		return
 	}
 
-	payment, err := service.Pay(account.ID, 10_00, "Food")
-
+	savedPayment, err := s.FindPaymentByID(payment.ID)
 	if err != nil {
-		t.Errorf("error => %v", err)
+		t.Errorf("Reject(): can't find payment by id, error = %v", err)
+		return
 	}
 
-	pay, err := service.FindPaymentByID(payment.ID)
+	if savedPayment.Status != types.PaymentStatusFail {
+		t.Errorf("Reject(): status didn't change, payment = %v", savedPayment)
+		return
+	}
 
+	savedAccount, err := s.FindAccountByID(payment.AccountID)
 	if err != nil {
-		t.Errorf("error => %v", err)
+		t.Errorf("Reject(): balance didn't change, account = %v", savedAccount)
+		return
 	}
-
-	err = service.Reject(pay.ID)
-
-	if err != nil {
-		t.Errorf("error => %v", err)
-	}
-
-}
-
-func TestService_Reject_fail_user(t *testing.T) {
-	var service Service
-	service.RegisterAccount("9127660305")
-	account, err := service.FindAccountByID(1)
-
-	if err != nil {
-		t.Errorf("account => %v", account)
-	}
-
-	err = service.Deposit(account.ID, 100_00)
-	if err != nil {
-		t.Errorf("error => %v", err)
-	}
-
-	payment, err := service.Pay(account.ID, 10_00, "Food")
-
-	if err != nil {
-		t.Errorf("account => %v", account)
-	}
-
-	pay, err := service.FindPaymentByID(payment.ID)
-
-	if err != nil {
-		t.Errorf("payment => %v", payment)
-	}
-
-	err = service.Reject(pay.ID + "uu")
-
-	if err == nil {
-		t.Errorf("pay => %v", pay)
-	}
-
-}
-
-func TestService_RegisterAccount(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		phone types.Phone
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *types.Account
-		wantErr bool
-	}{
-		{
-			name:   "user successfully registered.",
-			fields: fields{},
-			args:   args{phone: "9127660305"},
-			want: &types.Account{
-				ID:      1,
-				Phone:   "9127660305",
-				Balance: 0,
-			},
-			wantErr: false,
-		},
-		{
-			name: "phone already registered",
-			fields: fields{
-				nextAccountID: 10,
-				accounts:      Accounts(),
-				payments:      nil,
-			},
-			args: args{
-				phone: "9127660305",
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			got, err := s.RegisterAccount(tt.args.phone)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("RegisterAccount() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("RegisterAccount() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestService_Deposit(t *testing.T) {
-	var accounts []*types.Account
-	accounts = append(accounts,
-		&types.Account{ID: 1, Phone: "9127660305", Balance: 0},
-		&types.Account{ID: 3, Phone: "9127660307", Balance: 2},
-		&types.Account{ID: 2, Phone: "9127660306", Balance: 1})
-
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		accountID int64
-		amount    types.Money
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			name:   "amount must be greater than zero",
-			fields: fields{},
-			args: args{
-				accountID: 1,
-				amount:    0,
-			},
-			wantErr: true,
-		},
-		{
-			name: "account not found",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      accounts,
-				payments:      nil,
-			},
-			args: args{
-				accountID: 4,
-				amount:    10,
-			},
-			wantErr: true,
-		},
-		{
-			name: "success",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      accounts,
-				payments:      nil,
-			},
-			args: args{
-				accountID: 1,
-				amount:    10,
-			},
-			wantErr: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			if err := s.Deposit(tt.args.accountID, tt.args.amount); (err != nil) != tt.wantErr {
-				t.Errorf("Deposit() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestService_FindAccountByID(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		accountID int64
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *types.Account
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			got, err := s.FindAccountByID(tt.args.accountID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("FindAccountByID() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("FindAccountByID() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestService_FindPaymentByID(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		paymentID string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *types.Payment
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			got, err := s.FindPaymentByID(tt.args.paymentID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("FindPaymentByID() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("FindPaymentByID() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestService_Pay(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		accountID int64
-		amount    types.Money
-		category  types.PaymentCategory
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *types.Payment
-		wantErr bool
-	}{
-		{
-			name:   "amount must be greater than zero",
-			fields: fields{},
-			args: args{
-				accountID: 0,
-				amount:    10,
-				category:  types.CategoryFood,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "account not found",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      Accounts(),
-				payments:      nil,
-			},
-			args: args{
-				accountID: 10,
-				amount:    10,
-				category:  types.CategoryIt,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-		{
-			name: "not enough balance in account",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      Accounts(),
-				payments:      nil,
-			},
-			args: args{
-				accountID: 4,
-				amount:    10,
-				category:  types.CategoryFood,
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			got, err := s.Pay(tt.args.accountID, tt.args.amount, tt.args.category)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Pay() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Pay() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestService_Reject(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-	}
-	type args struct {
-		paymentID string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-			}
-			if err := s.Reject(tt.args.paymentID); (err != nil) != tt.wantErr {
-				t.Errorf("Reject() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func Accounts() []*types.Account {
-	var accounts []*types.Account
-	accounts = append(
-		accounts,
-		&types.Account{ID: 1, Phone: "9127660305", Balance: 0},
-		&types.Account{ID: 2, Phone: "9127660306", Balance: 1},
-		&types.Account{ID: 3, Phone: "9127660307", Balance: 2},
-		&types.Account{ID: 4, Phone: "9127660307", Balance: 3})
-	return accounts
-}
-
-func Payments() []*types.Payment {
-	var payments []*types.Payment
-	payments = append(
-		payments,
-		&types.Payment{
-			ID:        "e1dceb29-6cc4-48c5-acd4-455530f9d50a",
-			AccountID: 3,
-			Amount:    1,
-			Category:  types.CategoryFood,
-			Status:    types.PaymentStatusInProgress,
-		},
-		&types.Payment{
-			ID:        "5f7834e5-1c1e-42ff-bd78-9fd7f1b5da28",
-			AccountID: 2,
-			Amount:    1,
-			Category:  types.CategoryIt,
-			Status:    types.PaymentStatusInProgress,
-		})
-	return payments
 }
 
 func TestService_Repeat_success(t *testing.T) {
 	s := newTestService()
-
-	account, err := s.AddAccountWithBalance("9127660305", 100)
+	_, payments, err := s.addAccount(defaultTestAccount)
 	if err != nil {
-		t.Errorf("account => %v", account)
+		t.Error(err)
 		return
 	}
 
-	payment, err := s.Pay(account.ID, 10, types.CategoryIt)
+	payment := payments[0]
+	_, err = s.Repeat(payment.ID)
 	if err != nil {
-		t.Errorf("payment => %v", payment)
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+}
+
+func TestService_Repeat_fail(t *testing.T) {
+	s := newTestService()
+	account, _, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
 		return
 	}
 
-	newPayment, err := s.Repeat(payment.ID)
-	if err != nil {
-		t.Errorf("newPayment => %v", newPayment)
+	payment, err := s.Pay(account.ID, 6_000_00, "auto")
+
+	_, err = s.Repeat(payment.ID)
+	if err != ErrNotEnoughBalance {
+		t.Errorf("Repeat(): error should be ErrNotEnoughBalance, but got: %v", err)
 		return
 	}
 }
 
 func TestService_FavoritePayment_success(t *testing.T) {
 	s := newTestService()
-	account, err := s.AddAccountWithBalance("9127660305", 100)
-	if err != nil {
-		t.Errorf("account => %v", account)
-		return
-	}
-
-	payment, err := s.Pay(account.ID, 10, types.CategoryIt)
-	if err != nil {
-		t.Errorf("payment => %v", payment)
-		return
-	}
-
-	favorite, err := s.FavoritePayment(payment.ID, types.CategoryIt)
-	if err != nil {
-		t.Errorf("favorite => %v", favorite)
-		return
-	}
-
-	payFromFavorite, err := s.PayFromFavorite(favorite.ID)
-	if err != nil {
-		t.Errorf("payFromFavorite => %v", payFromFavorite)
-		return
-	}
-}
-
-func TestService_FindFavoriteByID(t *testing.T) {
-	type fields struct {
-		nextAccountID int64
-		accounts      []*types.Account
-		payments      []*types.Payment
-		favorites     []*types.Favorite
-	}
-	type args struct {
-		favoriteID string
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *types.Favorite
-		wantErr bool
-	}{
-		{
-			name: "successFull find",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      Accounts(),
-				payments:      Payments(),
-				favorites:     Favorites(),
-			},
-			args: args{
-				favoriteID: defaultFavorite.ID,
-			},
-			want:    &defaultFavorite,
-			wantErr: false,
-		},
-		{
-			name: "successFull find",
-			fields: fields{
-				nextAccountID: 0,
-				accounts:      Accounts(),
-				payments:      Payments(),
-				favorites:     Favorites(),
-			},
-			args: args{
-				favoriteID: "nonExistingFavoriteID",
-			},
-			want:    nil,
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s := &Service{
-				nextAccountID: tt.fields.nextAccountID,
-				accounts:      tt.fields.accounts,
-				payments:      tt.fields.payments,
-				favorites:     tt.fields.favorites,
-			}
-			got, err := s.FindFavoriteByID(tt.args.favoriteID)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("FindFavoriteByID() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("FindFavoriteByID() got = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Favorites() []*types.Favorite {
-	var favorites []*types.Favorite
-	favorites = append(
-		favorites,
-		&types.Favorite{
-			ID:        defaultFavorite.ID,
-			AccountID: Accounts()[0].ID,
-			Name:      types.CategoryIt,
-			Amount:    10,
-			Category:  types.CategoryIt,
-		}, &types.Favorite{
-			ID:        uuid.New().String(),
-			AccountID: Accounts()[1].ID,
-			Name:      types.CategoryIt,
-			Amount:    10,
-			Category:  types.CategoryIt,
-		}, &types.Favorite{
-			ID:        uuid.New().String(),
-			AccountID: Accounts()[2].ID,
-			Name:      types.CategoryIt,
-			Amount:    10,
-			Category:  types.CategoryIt,
-		}, &types.Favorite{
-			ID:        uuid.New().String(),
-			AccountID: Accounts()[3].ID,
-			Name:      types.CategoryIt,
-			Amount:    10,
-			Category:  types.CategoryIt,
-		})
-	return favorites
-}
-
-func TestService_ExportToFile(t *testing.T) {
-	s := newTestService()
-	_, _ = s.AddAccountWithBalance("9127660305", 10)
-	_, _ = s.AddAccountWithBalance("9127660306", 11)
-	_ = s.ExportToFile("../../data/accounts.txt")
-}
-
-func TestService_ImportFromFile(t *testing.T) {
-	s := newTestService()
-	_ = s.ImportFromFile("../../data/accounts.txt")
-}
-
-func TestService_Export(t *testing.T) {
-	s := newTestService()
-	account1, _ := s.AddAccountWithBalance("9127660305", 10)
-	payment, _ := s.Pay(account1.ID, 10, types.CategoryIt)
-	_, _ = s.FavoritePayment(payment.ID, types.CategoryIt)
-
-	account2, _ := s.AddAccountWithBalance("9127660306", 11)
-	payment2, _ := s.Pay(account2.ID, 10, types.CategoryIt)
-	_, _ = s.FavoritePayment(payment2.ID, types.CategoryIt)
-
-	_ = s.Export("../../data/s")
-}
-
-func TestService_Import(t *testing.T) {
-	s := newTestService()
-	_ = s.Import("../../data/")
-}
-func TestService_Import2(t *testing.T) {
-	dirname := uuid.New().String()
-
-	// создаём сервис
-	s := newTestService()
-	account1, _ := s.AddAccountWithBalance("9127660305", 10)
-	payment, _ := s.Pay(account1.ID, 10, types.CategoryIt)
-	_, _ = s.FavoritePayment(payment.ID, types.CategoryIt)
-
-	account2, _ := s.AddAccountWithBalance("9127660306", 11)
-	payment2, _ := s.Pay(account2.ID, 10, types.CategoryIt)
-	_, _ = s.FavoritePayment(payment2.ID, types.CategoryIt)
-
-	err := os.Mkdir(dirname, 0777)
+	_, payments, err := s.addAccount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	err = s.Export(dirname)
+	payment := payments[0]
+	_, err = s.FavoritePayment(payment.ID, "my favorite payment")
 	if err != nil {
 		t.Error(err)
 		return
 	}
-
-	_, err = os.Stat(filepath.Join(dirname, "accounts.dump"))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	_, err = os.Stat(filepath.Join(dirname, "payments.dump"))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	//_, err = os.Stat(filepath.Join(dirname, "favorites.dump"))
-	//if err == nil {
-	//	t.Error(errors.New("favorites.dump should not exists"))
-	//	return
-	//}
-
-	i := newTestService()
-	err = i.Import(dirname)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if !reflect.DeepEqual(s.accounts, i.accounts) {
-		t.Error(errors.New("imported and exported accounts doesn't match"))
-		return
-	}
-
-	if !reflect.DeepEqual(s.payments, i.payments) {
-		t.Error(errors.New("imported and exported payments doesn't match"))
-		return
-	}
-
-	//if !reflect.DeepEqual(s.favorites, i.favorites) {
-	//	t.Error(errors.New("imported and exported favorites doesn't match"))
-	//	return
-	//}
 }
 
-func BenchmarkService_SumPayments(b *testing.B) {
+func TestService_FavoritePayment_fail(t *testing.T) {
 	s := newTestService()
-	account1, _ := s.AddAccountWithBalance("9127660305", 10)
-	_, _ = s.Pay(account1.ID, 10, types.CategoryIt)
-	_, _ = s.Pay(account1.ID, 10, types.CategoryIt)
-	_, _ = s.Pay(account1.ID, 10, types.CategoryIt)
-	_, _ = s.Pay(account1.ID, 10, types.CategoryIt)
+	_, _, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-	want := types.Money(10)
-
-	got := s.SumPayments(2)
-	if want != got {
-		b.Errorf(" error, want => %v got => %v", want, got)
+	_, err = s.FavoritePayment(uuid.New().String(), "my favorite payment")
+	if err != ErrPaymentNotFound {
+		t.Errorf("FavoritePayment(): error should be ErrPaymentNotFound, but is %v", err)
+		return
 	}
 }
+
+func TestService_PayFromFavorite_success(t *testing.T) {
+	s := newTestService()
+	_, payments, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	payment := payments[0]
+	favorite, err := s.FavoritePayment(payment.ID, "my favorite payment")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = s.PayFromFavorite(favorite.ID)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+}
+
+func TestService_PayFromFavorite_fail(t *testing.T) {
+	s := newTestService()
+	_, payments, err := s.addAccount(defaultTestAccount)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	payment := payments[0]
+	_, err = s.FavoritePayment(payment.ID, "my favorite payment")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = s.PayFromFavorite(uuid.New().String())
+	if err != ErrFavoriteNotFound {
+		t.Errorf("PayFromFavorite(): error should be ErrFavoriteNotFound, but is %v", err)
+		return
+	}
+}
+
+func Data(s *testService) {
+	s.RegisterAccount("+992000000001")
+	s.Deposit(1, 10_000_00)
+	s.Pay(1, 1, "food")
+	s.Pay(1, 2, "mobile")
+	s.Pay(1, 3, "transport")
+	s.Pay(1, 4, "mobile")
+	s.Pay(1, 5, "food")
+	s.Pay(1, 6, "auto")
+	s.Pay(1, 11, "bank")
+
+	s.RegisterAccount("+992000000002")
+	s.Deposit(2, 2000000)
+	s.Pay(2, 8, "mobile")
+
+	s.RegisterAccount("+992000000003")
+	s.Deposit(3, 3000000)
+	s.Pay(3, 9, "auto")
+	s.Pay(3, 10, "food")
+	s.Pay(3, 11, "mobile")
+}
+
+func TestService_ExportAccountHistory(t *testing.T) {
+	s := newTestService()
+	Data(s)
+
+	_, err := s.ExportAccountHistory(1)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestService_HistoryToFiles(t *testing.T) {
+	s := newTestService()
+	Data(s)
+
+	payments, err := s.ExportAccountHistory(1)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = s.HistoryToFiles(payments, "history", 3)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestService_SumPayments(t *testing.T) {
+	s := newTestService()
+	Data(s)
+
+	sum := s.SumPayments(3)
+
+	if sum != 70 {
+		t.Error(sum)
+	}
+}
+
+func BenchmarkSumPayments(b *testing.B) {
+	s := newTestService()
+	Data(s)
+
+	b.ResetTimer()
+
+	want := types.Money(70)
+	for i := 0; i < b.N; i++ {
+		result := s.SumPayments(2)
+		b.StopTimer()
+		if result != want {
+			b.Fatalf("Invalid result, got %v, want %v", result, want)
+		}
+		b.StartTimer()
+	}
+}
+
+

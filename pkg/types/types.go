@@ -6,15 +6,9 @@ type PaymentStatus string
 type Phone string
 
 const (
-	PaymentStatusOK         PaymentStatus = "OK"
-	PaymentStatusFail       PaymentStatus = "FAIL"
+	PaymentStatusOk       PaymentStatus = "OK"
+	PaymentStatusFail     PaymentStatus = "FAIL"
 	PaymentStatusInProgress PaymentStatus = "INPROGRESS"
-)
-
-const (
-	CategoryFood = "food"
-	CategoryIt   = "it"
-	CategoryShop = "shop"
 )
 
 type Payment struct {
