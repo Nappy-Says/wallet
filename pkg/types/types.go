@@ -5,9 +5,10 @@ type PaymentCategory string
 type PaymentStatus string
 type Phone string
 
+
 const (
-	PaymentStatusOk       PaymentStatus = "OK"
-	PaymentStatusFail     PaymentStatus = "FAIL"
+	PaymentStatusOk         PaymentStatus = "OK"
+	PaymentStatusFail       PaymentStatus = "FAIL"
 	PaymentStatusInProgress PaymentStatus = "INPROGRESS"
 )
 
