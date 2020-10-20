@@ -205,6 +205,38 @@ func TestService_Export_success(t *testing.T) {
 	}
 }
 
+func TestService_ExportHistory_success_user(t *testing.T) {
+	svc := Service{}
+
+	acc, err := svc.RegisterAccount("+992000000001")
+
+	if err != nil {
+		t.Errorf("method RegisterAccount returned not nil error, account => %v", acc)
+	}
+
+	err = svc.Deposit(acc.ID, 100_00)
+	if err != nil {
+		t.Errorf("method Deposit returned not nil error, error => %v", err)
+	}
+
+	_, err = svc.Pay(acc.ID, 1, "Cafe")
+	_, err = svc.Pay(acc.ID, 2, "Auto")
+	_, err = svc.Pay(acc.ID, 3, "MarketShop")
+	if err != nil {
+		t.Errorf("method Pay returned not nil error, err => %v", err)
+	}
+
+	payments, err := svc.ExportAccountHistory(acc.ID)
+	if err != nil {
+		t.Errorf("method ExportAccountHistory returned not nil error, err => %v", err)
+	}
+
+	err = svc.HistoryToFiles(payments, "../../data", 2)
+	if err != nil {
+		t.Errorf("method HistoryToFiles returned not nil error, err => %v", err)
+	}
+}
+
 func BenchmarkSumPayment_user(b *testing.B) {
 	var svc Service
 
