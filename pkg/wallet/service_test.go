@@ -268,7 +268,7 @@ func TestService_FindAccountByID(t *testing.T) {
 		want    *types.Account
 		wantErr bool
 	}{
-
+		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -305,7 +305,7 @@ func TestService_FindPaymentByID(t *testing.T) {
 		want    *types.Payment
 		wantErr bool
 	}{
-
+		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -420,7 +420,7 @@ func TestService_Reject(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-
+		// TODO: Add test cases.
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -647,6 +647,7 @@ func TestService_Import(t *testing.T) {
 func TestService_Import2(t *testing.T) {
 	dirname := "../../data/" + uuid.New().String()
 
+	// создаём сервис
 	s := newTestService()
 	account1, _ := s.AddAccountWithBalance("9127660305", 10)
 	payment, _ := s.Pay(account1.ID, 10, types.CategoryIt)
@@ -732,4 +733,11 @@ func TestService_SumPaymentsWithProgress(t *testing.T) {
 	}
 
 	s.SumPaymentsWithProgress()
+	//want := make(chan types.Progress)
+	//got := s.SumPaymentsWithProgress()
+	//
+	//if want != got {
+	//	t.Errorf(" error, want => %v got => %v", want, got)
+	//}
+	//
 }

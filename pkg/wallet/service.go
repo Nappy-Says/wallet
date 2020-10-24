@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"github.com/Nappy-Sayd/wallet/pkg/types"
+	"github.com/Nappy-Says/wallet/pkg/types"
 	"github.com/google/uuid"
 	"io"
 	"io/ioutil"
