@@ -5,11 +5,16 @@ type PaymentCategory string
 type PaymentStatus string
 type Phone string
 
-
 const (
-	PaymentStatusOk         PaymentStatus = "OK"
+	PaymentStatusOK         PaymentStatus = "OK"
 	PaymentStatusFail       PaymentStatus = "FAIL"
 	PaymentStatusInProgress PaymentStatus = "INPROGRESS"
+)
+
+const (
+	CategoryFood = "food"
+	CategoryIt   = "it"
+	CategoryShop = "shop"
 )
 
 type Payment struct {
@@ -32,4 +37,9 @@ type Favorite struct {
 	Name      string
 	Amount    Money
 	Category  PaymentCategory
+}
+
+type Progress struct {
+	Part   int
+	Result Money
 }
